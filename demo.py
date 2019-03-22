@@ -164,32 +164,35 @@ def vis_detections(im,  dets, image_name , thresh=0.5):
     inds = np.where(dets[:, -1] >= thresh)[0]
     if len(inds) == 0:
         return
-    print (len(inds))
-    im = im[:, :, (2, 1, 0)]
-    fig, ax = plt.subplots(figsize=(12, 12))
-    ax.imshow(im, aspect='equal')
+    # print (len(inds))
+    # im = im[:, :, (2, 1, 0)]
+    # fig, ax = plt.subplots(figsize=(12, 12))
+    # ax.imshow(im, aspect='equal')
     for i in inds:
         bbox = dets[i, :4]
         score = dets[i, -1]
-        ax.add_patch(
-            plt.Rectangle((bbox[0], bbox[1]),
-                          bbox[2] - bbox[0],
-                          bbox[3] - bbox[1], fill=False,
-                          edgecolor='red', linewidth=2.5)
-            )
+        cv2.rectangle(im, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), [0,0,255], 1)
+        cv2.putText(im, '%.3f' % score, (int(bbox[0]), int(bbox[1])), 0, 1, [0,0,255], 1)
+        # ax.add_patch(
+        #     plt.Rectangle((bbox[0], bbox[1]),
+        #                   bbox[2] - bbox[0],
+        #                   bbox[3] - bbox[1], fill=False,
+        #                   edgecolor='red', linewidth=2.5)
+        #     )
         '''
         ax.text(bbox[0], bbox[1] - 5,
                 '{:s} {:.3f}'.format(class_name, score),
                 bbox=dict(facecolor='blue', alpha=0.5),
                 fontsize=10, color='white')
         '''
-    ax.set_title(('{} detections with '
-                  'p({} | box) >= {:.1f}').format(class_name, class_name,
-                                                  thresh),
-                  fontsize=10)
-    plt.axis('off')
-    plt.tight_layout()
-    plt.savefig(args.save_folder+image_name, dpi=fig.dpi)
+    # ax.set_title(('{} detections with '
+    #               'p({} | box) >= {:.1f}').format(class_name, class_name,
+    #                                               thresh),
+    #               fontsize=10)
+    # plt.axis('off')
+    # plt.tight_layout()
+    # plt.savefig(args.save_folder+image_name, dpi=fig.dpi)
+    cv2.imwrite(args.save_folder+image_name, im)
 
 def test_oneimage():
     # load net
@@ -246,5 +249,82 @@ def test_oneimage():
     vis_detections(img , det , img_id, args.visual_threshold)
 
 
+def test_folder():
+    # load net
+    cfg = widerface_640
+    num_classes = len(WIDERFace_CLASSES) + 1 # +1 background
+    net = build_ssd('test', cfg['min_dim'], num_classes) # initialize SSD
+    net.load_state_dict(torch.load(args.trained_model))
+    net.cuda()
+    net.eval()
+    print('Finished loading model!')
+
+    # evaluation
+    cuda = args.cuda
+    transform = TestBaseTransform((104, 117, 123))
+    thresh=cfg['conf_thresh']
+    #save_path = args.save_folder
+    #num_images = len(testset)
+
+    # load data
+    path = args.img_root
+    img_id = 'face'
+
+    for frame_idx in range(0, 1200):
+
+        ## Log progress
+        if frame_idx % 10 == 0:
+            time_visualize_start = time.time()
+
+        img = cv2.imread('../detector-mayi/test/sample_mid01/inputs/%05d.jpg' % (frame_idx), cv2.IMREAD_COLOR)
+
+        max_im_shrink = ( (2000.0*2000.0) / (img.shape[0] * img.shape[1])) ** 0.5
+        shrink = max_im_shrink if max_im_shrink < 1 else 1
+
+        det0 = infer(net , img , transform , thresh , cuda , shrink)
+        det1 = infer_flip(net , img , transform , thresh , cuda , shrink)
+        # shrink detecting and shrink only detect big face
+        st = 0.5 if max_im_shrink >= 0.75 else 0.5 * max_im_shrink
+        det_s = infer(net , img , transform , thresh , cuda , st)
+        index = np.where(np.maximum(det_s[:, 2] - det_s[:, 0] + 1, det_s[:, 3] - det_s[:, 1] + 1) > 30)[0]
+        det_s = det_s[index, :]
+        # enlarge one times
+        factor = 2
+        bt = min(factor, max_im_shrink) if max_im_shrink > 1 else (st + max_im_shrink) / 2
+        det_b = infer(net , img , transform , thresh , cuda , bt)
+        # enlarge small iamge x times for small face
+        if max_im_shrink > factor:
+            bt *= factor
+            while bt < max_im_shrink:
+                det_b = np.row_stack((det_b, infer(net , img , transform , thresh , cuda , bt)))
+                bt *= factor
+            det_b = np.row_stack((det_b, infer(net , img , transform , thresh , cuda , max_im_shrink) ))
+        # enlarge only detect small face
+        if bt > 1:
+            index = np.where(np.minimum(det_b[:, 2] - det_b[:, 0] + 1, det_b[:, 3] - det_b[:, 1] + 1) < 100)[0]
+            det_b = det_b[index, :]
+        else:
+            index = np.where(np.maximum(det_b[:, 2] - det_b[:, 0] + 1, det_b[:, 3] - det_b[:, 1] + 1) > 30)[0]
+            det_b = det_b[index, :]
+        det = np.row_stack((det0, det1, det_s, det_b))
+        det = bbox_vote(det)
+        vis_detections(img , det , '%05d.jpg' % (frame_idx), args.visual_threshold)
+
+        # inds = np.where(det[:, -1] >= args.visual_threshold)[0]
+        # if len(inds) != 0:
+        #     for i in inds:
+        #         bbox = det[i, :4]
+        #         score = det[i, -1]
+        #         cv2.rectangle(img, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), [0,0,255], 1)
+        #         cv2.putText(img, '%.3f' % score, (int(bbox[0]), int(bbox[1])), 0, 1, [0,0,255], 1)
+        # cv2.imwrite(args.save_folder+'%05d.jpg' % (frame_idx), img)
+
+        ## Log progress
+        if (frame_idx+1) % 10 == 0:
+            print('#### FPS {:4.1f} -- visualize #{:4} - #{:4}'
+                .format(10/(time.time()-time_visualize_start), frame_idx-10+1, frame_idx))
+
+
 if __name__ == '__main__':
-    test_oneimage()
+    # test_oneimage()
+    test_folder()
