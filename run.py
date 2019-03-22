@@ -74,6 +74,7 @@ def bbox_vote(det):
     return dets
 
 
+
 def infer(net , img , transform , thresh , cuda , shrink):
     if shrink != 1:
         img = cv2.resize(img, None, None, fx=shrink, fy=shrink, interpolation=cv2.INTER_LINEAR)
@@ -108,6 +109,7 @@ def infer(net , img , transform , thresh , cuda , shrink):
         return det
 
 
+
 def infer_flip(net , img , transform , thresh , cuda , shrink):
     img = cv2.flip(img, 1)
     det = infer(net , img , transform , thresh , cuda , shrink)
@@ -118,6 +120,7 @@ def infer_flip(net , img , transform , thresh , cuda , shrink):
     det_t[:, 3] = det[:, 3]
     det_t[:, 4] = det[:, 4]
     return det_t
+
 
 
 def detect_frames():
@@ -135,10 +138,6 @@ def detect_frames():
     cuda = opt.cuda
     transform = TestBaseTransform((104, 117, 123))
     thresh = cfg['conf_thresh']
-
-    # load data
-    path = opt.img_root
-    img_id = 'face'
 
     factor = 2
 
