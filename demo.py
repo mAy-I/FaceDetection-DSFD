@@ -1,4 +1,4 @@
-from __future__ import print_function 
+from __future__ import print_function
 import sys
 import os
 import argparse
@@ -83,7 +83,7 @@ def write_to_txt(f, det , event , im_name):
         ymin = det[i][1]
         xmax = det[i][2]
         ymax = det[i][3]
-        score = det[i][4] 
+        score = det[i][4]
         f.write('{:.1f} {:.1f} {:.1f} {:.1f} {:.3f}\n'.
                 format(xmin, ymin, (xmax - xmin + 1), (ymax - ymin + 1), score))
 
@@ -91,32 +91,34 @@ def infer(net , img , transform , thresh , cuda , shrink):
     if shrink != 1:
         img = cv2.resize(img, None, None, fx=shrink, fy=shrink, interpolation=cv2.INTER_LINEAR)
     x = torch.from_numpy(transform(img)[0]).permute(2, 0, 1)
-    x = Variable(x.unsqueeze(0) , volatile=True)
-    if cuda:
-        x = x.cuda()
-    #print (shrink , x.shape)
-    y = net(x)      # forward pass
-    detections = y.data
-    # scale each detection back up to the image
-    scale = torch.Tensor([ img.shape[1]/shrink, img.shape[0]/shrink,
-                         img.shape[1]/shrink, img.shape[0]/shrink] )
-    det = []
-    for i in range(detections.size(1)):
-        j = 0
-        while detections[0, i, j, 0] >= thresh:
-            score = detections[0, i, j, 0]
-            #label_name = labelmap[i-1]
-            pt = (detections[0, i, j, 1:]*scale).cpu().numpy()
-            coords = (pt[0], pt[1], pt[2], pt[3]) 
-            det.append([pt[0], pt[1], pt[2], pt[3], score])
-            j += 1
-    if (len(det)) == 0:
-        det = [ [0.1,0.1,0.2,0.2,0.01] ]
-    det = np.array(det)
+    with torch.no_grad():
+        x = Variable(x.unsqueeze(0))
+        # x = Variable(x.unsqueeze(0) , volatile=True)
+        if cuda:
+            x = x.cuda()
+        #print (shrink , x.shape)
+        y = net(x)      # forward pass
+        detections = y.data
+        # scale each detection back up to the image
+        scale = torch.Tensor([ img.shape[1]/shrink, img.shape[0]/shrink,
+                             img.shape[1]/shrink, img.shape[0]/shrink] )
+        det = []
+        for i in range(detections.size(1)):
+            j = 0
+            while detections[0, i, j, 0] >= thresh:
+                score = detections[0, i, j, 0].cpu().numpy()
+                #label_name = labelmap[i-1]
+                pt = (detections[0, i, j, 1:]*scale).cpu().numpy()
+                coords = (pt[0], pt[1], pt[2], pt[3])
+                det.append([pt[0], pt[1], pt[2], pt[3], score])
+                j += 1
+        if (len(det)) == 0:
+            det = [ [0.1,0.1,0.2,0.2,0.01] ]
+        det = np.array(det)
 
-    keep_index = np.where(det[:, 4] >= 0)[0]
-    det = det[keep_index, :]
-    return det
+        keep_index = np.where(det[:, 4] >= 0)[0]
+        det = det[keep_index, :]
+        return det
 
 def infer_flip(net , img , transform , thresh , cuda , shrink):
     img = cv2.flip(img, 1)
@@ -205,7 +207,7 @@ def test_oneimage():
     thresh=cfg['conf_thresh']
     #save_path = args.save_folder
     #num_images = len(testset)
- 
+
     # load data
     path = args.img_root
     img_id = 'face'
