@@ -325,6 +325,43 @@ def test_folder():
                 .format(10/(time.time()-time_visualize_start), frame_idx-10+1, frame_idx))
 
 
+def frame_to_video():
+
+    if os.path.isfile('face.mp4'):
+        os.remove('face.mp4')
+
+    files = [f for f in os.listdir('eval_tools/') if os.path.isfile(os.path.join('eval_tools/', f))]
+    ## For sorting the file name properly
+    files.sort(key = lambda x: int(x[:-4]))
+
+    img = cv2.imread('eval_tools/' + files[0])
+    out = cv2.VideoWriter('face.mp4', cv2.VideoWriter_fourcc(*'DIVX'), 30.0, (img.shape[1], img.shape[0]))
+
+    for i in range(len(files)):
+
+        ## Log progress
+        if i % 50 == 0:
+            time_f2v_start = time.time()
+
+        filename = 'eval_tools/' + files[i]
+        ## Reading each files
+        img = cv2.imread(filename)
+        out.write(img)
+
+        ## Log progress
+        if (i+1) % 50 == 0:
+            print('#### FPS {:4.1f} -- f2v #{:4} - #{:4}'
+                .format(50/(time.time()-time_f2v_start), i-50+1, i))
+
+    ## Log progress
+    if (i+1) % 50 != 0:
+        print('#### FPS {:4.1f} -- f2v #{:4} - #{:4}'
+            .format((i % 50 + 1)/(time.time()-time_f2v_start), i - i % 50, i))
+
+    out.release()
+
+
 if __name__ == '__main__':
     # test_oneimage()
-    test_folder()
+    # test_folder()
+    frame_to_video()
