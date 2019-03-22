@@ -19,28 +19,26 @@ import numpy as np
 import cv2
 import math
 import time
+import shutil
 
 
-parser = argparse.ArgumentParser(description='DSFD:Dual Shot Face Detector')
-parser.add_argument('--trained_model', default='weights/WIDERFace_DSFD_RES152.pth',
-                    type=str, help='Trained state_dict file path to open')
-parser.add_argument('--save_folder', default='eval_tools/', type=str,
-                    help='Dir to save results')
-parser.add_argument('--visual_threshold', default=0.1, type=float,
-                    help='Final confidence threshold')
-parser.add_argument('--cuda', default=True, type=bool,
-                    help='Use cuda to train model')
-parser.add_argument('--img_root', default='./data/worlds-largest-selfie.jpg', help='Location of test images directory')
-parser.add_argument('--widerface_root', default=WIDERFace_ROOT, help='Location of WIDERFACE root directory')
-args = parser.parse_args()
 
+def parse_args():
 
-if args.cuda and torch.cuda.is_available():
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
-else:
-    torch.set_default_tensor_type('torch.FloatTensor')
-if not os.path.exists(args.save_folder):
-    os.mkdir(args.save_folder)
+    parser = argparse.ArgumentParser(description='DSFD:Dual Shot Face Detector')
+
+    parser.add_argument('--trained_model', default='weights/WIDERFace_DSFD_RES152.pth',
+                        type=str, help='Trained state_dict file path to open')
+    parser.add_argument('--save_folder', default='eval_tools/', type=str,
+                        help='Dir to save results')
+    parser.add_argument('--visual_threshold', default=0.1, type=float,
+                        help='Final confidence threshold')
+    parser.add_argument('--cuda', default=True, type=bool,
+                        help='Use cuda to train model')
+    parser.add_argument('--widerface_root', default=WIDERFace_ROOT, help='Location of WIDERFACE root directory')
+
+    return parser.parse_args()
+
 
 
 def bbox_vote(det):
@@ -122,26 +120,27 @@ def infer_flip(net , img , transform , thresh , cuda , shrink):
     return det_t
 
 
-def test_folder():
+def detect_frames():
+
     # load net
     cfg = widerface_640
     num_classes = len(WIDERFace_CLASSES) + 1 # +1 background
     net = build_ssd('test', cfg['min_dim'], num_classes) # initialize SSD
-    net.load_state_dict(torch.load(args.trained_model))
+    net.load_state_dict(torch.load(opt.trained_model))
     net.cuda()
     net.eval()
     print('Finished loading model!')
 
     # evaluation
-    cuda = args.cuda
+    cuda = opt.cuda
     transform = TestBaseTransform((104, 117, 123))
-    thresh=cfg['conf_thresh']
-    #save_path = args.save_folder
-    #num_images = len(testset)
+    thresh = cfg['conf_thresh']
 
     # load data
-    path = args.img_root
+    path = opt.img_root
     img_id = 'face'
+
+    factor = 2
 
     for frame_idx in range(0, 1200):
 
@@ -162,7 +161,6 @@ def test_folder():
         index = np.where(np.maximum(det_s[:, 2] - det_s[:, 0] + 1, det_s[:, 3] - det_s[:, 1] + 1) > 30)[0]
         det_s = det_s[index, :]
         # enlarge one times
-        factor = 2
         bt = min(factor, max_im_shrink) if max_im_shrink > 1 else (st + max_im_shrink) / 2
         det_b = infer(net , img , transform , thresh , cuda , bt)
         # enlarge small iamge x times for small face
@@ -182,14 +180,14 @@ def test_folder():
         det = np.row_stack((det0, det1, det_s, det_b))
         det = bbox_vote(det)
 
-        inds = np.where(det[:, -1] >= args.visual_threshold)[0]
+        inds = np.where(det[:, -1] >= opt.visual_threshold)[0]
         if len(inds) != 0:
             for i in inds:
                 bbox = det[i, :4]
                 score = det[i, -1]
                 cv2.rectangle(img, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), [0,0,255], 3)
                 cv2.putText(img, '%.3f' % score, (int(bbox[0]), int(bbox[1])), 0, 1, [0,0,255], 3)
-        cv2.imwrite(args.save_folder+'%05d.jpg' % (frame_idx), img)
+        cv2.imwrite(opt.save_folder+'%05d.jpg' % (frame_idx), img)
 
         ## Log progress
         if (frame_idx+1) % 10 == 0:
@@ -197,7 +195,10 @@ def test_folder():
                 .format(10/(time.time()-time_visualize_start), frame_idx-10+1, frame_idx))
 
 
+
 def frame_to_video():
+
+    opt = parse_args()
 
     if os.path.isfile('face.mp4'):
         os.remove('face.mp4')
@@ -233,7 +234,19 @@ def frame_to_video():
     out.release()
 
 
+
 if __name__ == '__main__':
-    # test_oneimage()
-    test_folder()
+
+    opt = parse_args()
+
+    if opt.cuda and torch.cuda.is_available():
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    else:
+        torch.set_default_tensor_type('torch.FloatTensor')
+
+    if os.path.exists(opt.save_folder):
+        shutil.rmtree(opt.save_folder)
+    os.mkdir(opt.save_folder)
+
+    detect_frames()
     # frame_to_video()
