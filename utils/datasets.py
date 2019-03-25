@@ -6,26 +6,30 @@ import numpy as np
 import torch
 
 from torch.utils.data import Dataset
-from PIL import Image
 import torchvision.transforms as transforms
-
-from skimage.transform import resize
 
 import sys
 
 import cv2
 
+# from data import TestBaseTransform
 
 
 class ImageFolder(Dataset):
-    def __init__(self, folder_path, img_size=416):
+    def __init__(self, folder_path, shrink):
         self.files = sorted(glob.glob('%s/*.*' % folder_path))
-        self.img_shape = (img_size, img_size)
+        self.shrink = shrink
+
+        # transform = TestBaseTransform((104, 117, 123))
 
     def __getitem__(self, index):
         img_path = self.files[index % len(self.files)]
         # Extract image
         img = cv2.imread(img_path)
+
+        # if self.shrink != 1:
+        #     img = cv2.resize(img, None, None, fx=self.shrink, fy=self.shrink, interpolation=cv2.INTER_LINEAR)
+
         # h, w, _ = img.shape
         # dim_diff = np.abs(h - w)
         # # Upper (left) and lower (right) padding
@@ -41,7 +45,7 @@ class ImageFolder(Dataset):
         # # As pytorch tensor
         # input_img = torch.from_numpy(input_img).float()
 
-        return img_path, img
+        return img
 
     def __len__(self):
         return len(self.files)

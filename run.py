@@ -27,14 +27,16 @@ def parse_args():
 
     parser = argparse.ArgumentParser(description='DSFD:Dual Shot Face Detector')
 
-    parser.add_argument('--trained_model', default='weights/WIDERFace_DSFD_RES152.pth',
-                        type=str, help='Trained state_dict file path to open')
+    parser.add_argument('--trained_model', default='weights/WIDERFace_DSFD_RES152.pth', type=str,
+                        help='Trained state_dict file path to open')
     parser.add_argument('--save_folder', default='eval_tools/', type=str,
                         help='Dir to save results')
     parser.add_argument('--visual_threshold', default=0.1, type=float,
                         help='Final confidence threshold')
     parser.add_argument('--cuda', default=True, type=bool,
                         help='Use cuda to train model')
+    parser.add_argument('--log_step', type=int, default=50,
+                        help='')
 
     return parser.parse_args()
 
@@ -48,7 +50,7 @@ def infer(net, img, transform, thresh, cuda, shrink):
         x = Variable(x.unsqueeze(0))
         if cuda:
             x = x.cuda()
-        print (shrink, x.shape)
+        # print (shrink, x.shape)
         y = net(x)      # forward pass
         detections = y.data
         # scale each detection back up to the image
@@ -101,12 +103,12 @@ def detect_frames():
     # print('max_im_shrink: ' + str(max_im_shrink))
     # print('shrink: ' + str(shrink))
 
-    dataloader = DataLoader(ImageFolder('../detector-mayi/test/sample_mid01/inputs'), batch_size=1, shuffle=False, num_workers=8)
+    dataloader = DataLoader(ImageFolder('../detector-mayi/test/sample_mid01/inputs', shrink), batch_size=1, shuffle=False, num_workers=8)
 
-    for frame_idx, (_, img_batch) in enumerate(dataloader):
+    for frame_idx, (img_batch) in enumerate(dataloader):
 
         ## Log progress
-        if frame_idx % 50 == 0:
+        if frame_idx % opt.log_step == 0:
             time_visualize_start = time.time()
 
         img_batch = img_batch.squeeze()
@@ -124,9 +126,9 @@ def detect_frames():
         cv2.imwrite(opt.save_folder+'%05d.jpg' % (frame_idx), img)
 
         ## Log progress
-        if (frame_idx+1) % 50 == 0:
+        if (frame_idx+1) % opt.log_step == 0:
             print('#### FPS {:4.2f} -- visualize #{:4} - #{:4}'
-                .format(50/(time.time()-time_visualize_start), frame_idx-50+1, frame_idx))
+                .format(opt.log_step/(time.time()-time_visualize_start), frame_idx-opt.log_step+1, frame_idx))
 
 
 
@@ -147,7 +149,7 @@ def frame_to_video():
     for i in range(len(files)):
 
         ## Log progress
-        if i % 50 == 0:
+        if i % opt.log_step == 0:
             time_f2v_start = time.time()
 
         filename = 'eval_tools/' + files[i]
@@ -156,14 +158,14 @@ def frame_to_video():
         out.write(img)
 
         ## Log progress
-        if (i+1) % 50 == 0:
+        if (i+1) % opt.log_step == 0:
             print('#### FPS {:4.1f} -- f2v #{:4} - #{:4}'
-                .format(50/(time.time()-time_f2v_start), i-50+1, i))
+                .format(opt.log_step/(time.time()-time_f2v_start), i-opt.log_step+1, i))
 
     ## Log progress
-    if (i+1) % 50 != 0:
+    if (i+1) % opt.log_step != 0:
         print('#### FPS {:4.1f} -- f2v #{:4} - #{:4}'
-            .format((i % 50 + 1)/(time.time()-time_f2v_start), i - i % 50, i))
+            .format((i % opt.log_step + 1)/(time.time()-time_f2v_start), i - i % opt.log_step, i))
 
     out.release()
 
