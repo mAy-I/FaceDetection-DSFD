@@ -21,6 +21,8 @@ import math
 import time
 import shutil
 
+from torch.utils.data import DataLoader
+from utils.datasets import *
 
 
 def parse_args():
@@ -81,7 +83,6 @@ def infer(net , img , transform , thresh , cuda , shrink):
     x = torch.from_numpy(transform(img)[0]).permute(2, 0, 1)
     with torch.no_grad():
         x = Variable(x.unsqueeze(0))
-        # x = Variable(x.unsqueeze(0) , volatile=True)
         if cuda:
             x = x.cuda()
         #print (shrink , x.shape)
@@ -141,21 +142,30 @@ def detect_frames():
 
     factor = 2
 
-    for frame_idx in range(0, 1200):
+    dataloader = DataLoader(ImageFolder('../detector-mayi/test/sample_mid01/inputs'), batch_size=1, shuffle=False, num_workers=8)
+
+    img = cv2.imread('../detector-mayi/test/sample_mid01/inputs/00000.jpg')
+    [img_h, img_w] = [img.shape[0], img.shape[1]]
+
+    max_im_shrink = ( (2000.0*2000.0) / (img_h * img_w)) ** 0.5
+    shrink = max_im_shrink if max_im_shrink < 1 else 1
+    st = 0.5 if max_im_shrink >= 0.75 else 0.5 * max_im_shrink
+    # print('max_im_shrink: ' + str(max_im_shrink))
+    # print('shrink: ' + str(shrink))
+    # print('st: ' + str(st))
+
+    for frame_idx, (_, img_batch) in enumerate(dataloader):
 
         ## Log progress
         if frame_idx % 10 == 0:
             time_visualize_start = time.time()
 
-        img = cv2.imread('../detector-mayi/test/sample_mid01/inputs/%05d.jpg' % (frame_idx), cv2.IMREAD_COLOR)
-
-        max_im_shrink = ( (2000.0*2000.0) / (img.shape[0] * img.shape[1])) ** 0.5
-        shrink = max_im_shrink if max_im_shrink < 1 else 1
+        img_batch = img_batch.squeeze()
+        img = img_batch.numpy()
 
         det0 = infer(net , img , transform , thresh , cuda , shrink)
         det1 = infer_flip(net , img , transform , thresh , cuda , shrink)
         # shrink detecting and shrink only detect big face
-        st = 0.5 if max_im_shrink >= 0.75 else 0.5 * max_im_shrink
         det_s = infer(net , img , transform , thresh , cuda , st)
         index = np.where(np.maximum(det_s[:, 2] - det_s[:, 0] + 1, det_s[:, 3] - det_s[:, 1] + 1) > 30)[0]
         det_s = det_s[index, :]
@@ -190,7 +200,7 @@ def detect_frames():
 
         ## Log progress
         if (frame_idx+1) % 10 == 0:
-            print('#### FPS {:4.1f} -- visualize #{:4} - #{:4}'
+            print('#### FPS {:4.2f} -- visualize #{:4} - #{:4}'
                 .format(10/(time.time()-time_visualize_start), frame_idx-10+1, frame_idx))
 
 
