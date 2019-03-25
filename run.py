@@ -8,18 +8,19 @@ import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 from torch.autograd import Variable
 from PIL import Image
-from data import TestBaseTransform
 import torch.utils.data as data
-from face_ssd import build_ssd
 import pdb
 import numpy as np
 import cv2
 import math
 import time
 import shutil
-
 from torch.utils.data import DataLoader
+
+from data import TestBaseTransform
+from face_ssd import build_ssd
 from utils.datasets import *
+
 
 
 def parse_args():
