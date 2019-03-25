@@ -40,41 +40,7 @@ def parse_args():
 
 
 
-def bbox_vote(det):
-    order = det[:, 4].ravel().argsort()[::-1]
-    det = det[order, :]
-    while det.shape[0] > 0:
-        # IOU
-        area = (det[:, 2] - det[:, 0] + 1) * (det[:, 3] - det[:, 1] + 1)
-        xx1 = np.maximum(det[0, 0], det[:, 0])
-        yy1 = np.maximum(det[0, 1], det[:, 1])
-        xx2 = np.minimum(det[0, 2], det[:, 2])
-        yy2 = np.minimum(det[0, 3], det[:, 3])
-        w = np.maximum(0.0, xx2 - xx1 + 1)
-        h = np.maximum(0.0, yy2 - yy1 + 1)
-        inter = w * h
-        o = inter / (area[0] + area[:] - inter)
-        # get needed merge det and delete these det
-        merge_index = np.where(o >= 0.3)[0]
-        det_accu = det[merge_index, :]
-        det = np.delete(det, merge_index, 0)
-        if merge_index.shape[0] <= 1:
-            continue
-        det_accu[:, 0:4] = det_accu[:, 0:4] * np.tile(det_accu[:, -1:], (1, 4))
-        max_score = np.max(det_accu[:, 4])
-        det_accu_sum = np.zeros((1, 5))
-        det_accu_sum[:, 0:4] = np.sum(det_accu[:, 0:4], axis=0) / np.sum(det_accu[:, -1:])
-        det_accu_sum[:, 4] = max_score
-        try:
-            dets = np.row_stack((dets, det_accu_sum))
-        except:
-            dets = det_accu_sum
-    dets = dets[0:750, :]
-    return dets
-
-
-
-def infer(net , img , transform , thresh , cuda , shrink):
+def infer(net, img, transform, thresh, cuda, shrink):
     if shrink != 1:
         img = cv2.resize(img, None, None, fx=shrink, fy=shrink, interpolation=cv2.INTER_LINEAR)
     x = torch.from_numpy(transform(img)[0]).permute(2, 0, 1)
@@ -117,31 +83,25 @@ def detect_frames():
     # load net
     num_classes = 2 # face, background => 2
     min_dim = 640
-    net = build_ssd('test', 640, num_classes) # initialize SSD
+    net = build_ssd('test', min_dim, num_classes) # initialize SSD
     net.load_state_dict(torch.load(opt.trained_model))
     net.cuda()
     net.eval()
     print('Finished loading model!')
 
     # evaluation
-    cuda = opt.cuda
     transform = TestBaseTransform((104, 117, 123))
     thresh = 0.01
 
-    factor = 2
-
-    dataloader = DataLoader(ImageFolder('../detector-mayi/test/sample_mid01/inputs'), batch_size=1, shuffle=False, num_workers=8)
-
     img = cv2.imread('../detector-mayi/test/sample_mid01/inputs/00000.jpg')
     [img_h, img_w] = [img.shape[0], img.shape[1]]
-
-    shrink_const = 800.0
+    shrink_const = 400.0
     max_im_shrink = ( (shrink_const*shrink_const) / (img_h * img_w)) ** 0.5
     shrink = max_im_shrink if max_im_shrink < 1 else 1
-    st = 0.5 if max_im_shrink >= 0.75 else 0.5 * max_im_shrink
     # print('max_im_shrink: ' + str(max_im_shrink))
     # print('shrink: ' + str(shrink))
-    # print('st: ' + str(st))
+
+    dataloader = DataLoader(ImageFolder('../detector-mayi/test/sample_mid01/inputs'), batch_size=1, shuffle=False, num_workers=8)
 
     for frame_idx, (_, img_batch) in enumerate(dataloader):
 
@@ -152,7 +112,7 @@ def detect_frames():
         img_batch = img_batch.squeeze()
         img = img_batch.numpy()
 
-        det = infer(net , img , transform , thresh , cuda , shrink)
+        det = infer(net, img, transform, thresh, opt.cuda, shrink)
 
         inds = np.where(det[:, -1] >= opt.visual_threshold)[0]
         if len(inds) != 0:
