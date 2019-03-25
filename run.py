@@ -37,7 +37,6 @@ def parse_args():
                         help='Final confidence threshold')
     parser.add_argument('--cuda', default=True, type=bool,
                         help='Use cuda to train model')
-    parser.add_argument('--widerface_root', default=WIDERFace_ROOT, help='Location of WIDERFACE root directory')
 
     return parser.parse_args()
 
@@ -126,6 +125,10 @@ def infer_flip(net , img , transform , thresh , cuda , shrink):
 
 def detect_frames():
 
+    if os.path.exists(opt.save_folder):
+        shutil.rmtree(opt.save_folder)
+    os.mkdir(opt.save_folder)
+
     # load net
     cfg = widerface_640
     num_classes = len(WIDERFace_CLASSES) + 1 # +1 background
@@ -147,7 +150,7 @@ def detect_frames():
     img = cv2.imread('../detector-mayi/test/sample_mid01/inputs/00000.jpg')
     [img_h, img_w] = [img.shape[0], img.shape[1]]
 
-    max_im_shrink = ( (2000.0*2000.0) / (img_h * img_w)) ** 0.5
+    max_im_shrink = ( (800.0*800.0) / (img_h * img_w)) ** 0.5
     shrink = max_im_shrink if max_im_shrink < 1 else 1
     st = 0.5 if max_im_shrink >= 0.75 else 0.5 * max_im_shrink
     # print('max_im_shrink: ' + str(max_im_shrink))
@@ -157,7 +160,7 @@ def detect_frames():
     for frame_idx, (_, img_batch) in enumerate(dataloader):
 
         ## Log progress
-        if frame_idx % 10 == 0:
+        if frame_idx % 50 == 0:
             time_visualize_start = time.time()
 
         img_batch = img_batch.squeeze()
@@ -199,9 +202,9 @@ def detect_frames():
         cv2.imwrite(opt.save_folder+'%05d.jpg' % (frame_idx), img)
 
         ## Log progress
-        if (frame_idx+1) % 10 == 0:
+        if (frame_idx+1) % 50 == 0:
             print('#### FPS {:4.2f} -- visualize #{:4} - #{:4}'
-                .format(10/(time.time()-time_visualize_start), frame_idx-10+1, frame_idx))
+                .format(50/(time.time()-time_visualize_start), frame_idx-50+1, frame_idx))
 
 
 
@@ -253,9 +256,6 @@ if __name__ == '__main__':
     else:
         torch.set_default_tensor_type('torch.FloatTensor')
 
-    if os.path.exists(opt.save_folder):
-        shutil.rmtree(opt.save_folder)
-    os.mkdir(opt.save_folder)
-
     detect_frames()
-    # frame_to_video()
+
+    frame_to_video()
