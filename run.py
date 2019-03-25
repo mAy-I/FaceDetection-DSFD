@@ -82,7 +82,7 @@ def infer(net , img , transform , thresh , cuda , shrink):
         x = Variable(x.unsqueeze(0))
         if cuda:
             x = x.cuda()
-        #print (shrink , x.shape)
+        print (shrink, x.shape)
         y = net(x)      # forward pass
         detections = y.data
         # scale each detection back up to the image
@@ -105,19 +105,6 @@ def infer(net , img , transform , thresh , cuda , shrink):
         keep_index = np.where(det[:, 4] >= 0)[0]
         det = det[keep_index, :]
         return det
-
-
-
-def infer_flip(net , img , transform , thresh , cuda , shrink):
-    img = cv2.flip(img, 1)
-    det = infer(net , img , transform , thresh , cuda , shrink)
-    det_t = np.zeros(det.shape)
-    det_t[:, 0] = img.shape[1] - det[:, 2]
-    det_t[:, 1] = det[:, 1]
-    det_t[:, 2] = img.shape[1] - det[:, 0]
-    det_t[:, 3] = det[:, 3]
-    det_t[:, 4] = det[:, 4]
-    return det_t
 
 
 
@@ -148,7 +135,8 @@ def detect_frames():
     img = cv2.imread('../detector-mayi/test/sample_mid01/inputs/00000.jpg')
     [img_h, img_w] = [img.shape[0], img.shape[1]]
 
-    max_im_shrink = ( (800.0*800.0) / (img_h * img_w)) ** 0.5
+    shrink_const = 800.0
+    max_im_shrink = ( (shrink_const*shrink_const) / (img_h * img_w)) ** 0.5
     shrink = max_im_shrink if max_im_shrink < 1 else 1
     st = 0.5 if max_im_shrink >= 0.75 else 0.5 * max_im_shrink
     # print('max_im_shrink: ' + str(max_im_shrink))
@@ -164,31 +152,7 @@ def detect_frames():
         img_batch = img_batch.squeeze()
         img = img_batch.numpy()
 
-        det0 = infer(net , img , transform , thresh , cuda , shrink)
-        det1 = infer_flip(net , img , transform , thresh , cuda , shrink)
-        # shrink detecting and shrink only detect big face
-        det_s = infer(net , img , transform , thresh , cuda , st)
-        index = np.where(np.maximum(det_s[:, 2] - det_s[:, 0] + 1, det_s[:, 3] - det_s[:, 1] + 1) > 30)[0]
-        det_s = det_s[index, :]
-        # enlarge one times
-        bt = min(factor, max_im_shrink) if max_im_shrink > 1 else (st + max_im_shrink) / 2
-        det_b = infer(net , img , transform , thresh , cuda , bt)
-        # enlarge small iamge x times for small face
-        if max_im_shrink > factor:
-            bt *= factor
-            while bt < max_im_shrink:
-                det_b = np.row_stack((det_b, infer(net , img , transform , thresh , cuda , bt)))
-                bt *= factor
-            det_b = np.row_stack((det_b, infer(net , img , transform , thresh , cuda , max_im_shrink) ))
-        # enlarge only detect small face
-        if bt > 1:
-            index = np.where(np.minimum(det_b[:, 2] - det_b[:, 0] + 1, det_b[:, 3] - det_b[:, 1] + 1) < 100)[0]
-            det_b = det_b[index, :]
-        else:
-            index = np.where(np.maximum(det_b[:, 2] - det_b[:, 0] + 1, det_b[:, 3] - det_b[:, 1] + 1) > 30)[0]
-            det_b = det_b[index, :]
-        det = np.row_stack((det0, det1, det_s, det_b))
-        det = bbox_vote(det)
+        det = infer(net , img , transform , thresh , cuda , shrink)
 
         inds = np.where(det[:, -1] >= opt.visual_threshold)[0]
         if len(inds) != 0:
@@ -256,4 +220,4 @@ if __name__ == '__main__':
 
     detect_frames()
 
-    frame_to_video()
+    # frame_to_video()
