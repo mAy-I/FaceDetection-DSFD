@@ -3,5 +3,3 @@ eval_tools/*
 eval_tools_db
 weights
 *.mp4
-
-*.pyc

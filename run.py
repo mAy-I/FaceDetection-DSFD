@@ -7,13 +7,10 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 from torch.autograd import Variable
-from data import WIDERFace_ROOT , WIDERFace_CLASSES as labelmap
 from PIL import Image
-from data import WIDERFaceDetection, WIDERFaceAnnotationTransform, WIDERFace_CLASSES, WIDERFace_ROOT, BaseTransform , TestBaseTransform
-from data import *
+from data import TestBaseTransform
 import torch.utils.data as data
 from face_ssd import build_ssd
-#from resnet50_ssd import build_sfd
 import pdb
 import numpy as np
 import cv2
@@ -130,9 +127,9 @@ def detect_frames():
     os.mkdir(opt.save_folder)
 
     # load net
-    cfg = widerface_640
-    num_classes = len(WIDERFace_CLASSES) + 1 # +1 background
-    net = build_ssd('test', cfg['min_dim'], num_classes) # initialize SSD
+    num_classes = 2 # face, background => 2
+    min_dim = 640
+    net = build_ssd('test', 640, num_classes) # initialize SSD
     net.load_state_dict(torch.load(opt.trained_model))
     net.cuda()
     net.eval()
@@ -141,7 +138,7 @@ def detect_frames():
     # evaluation
     cuda = opt.cuda
     transform = TestBaseTransform((104, 117, 123))
-    thresh = cfg['conf_thresh']
+    thresh = 0.01
 
     factor = 2
 

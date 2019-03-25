@@ -54,7 +54,7 @@ class MultiBoxLoss(nn.Module):
         self.use_pa = use_pa
         #self.tmp = [0,0]
     def forward(self, predictions, targets):
-        if pa and self.odm and self.use_pa: 
+        if pa and self.odm and self.use_pa:
             self.part = 'face'
             if refine:
                 face_loss_l , face_loss_c = self.part_forward( (predictions[0],predictions[1],predictions[2]), targets ,(predictions[-2],predictions[-1]), True)
@@ -100,18 +100,18 @@ class MultiBoxLoss(nn.Module):
             labels = targets[idx][:, -1].data
             defaults = priors.data
             # sft match strategy , swordli
-            if ac: 
+            if ac:
                 sfd_match(self.threshold, truths, defaults, self.variance, labels, loc_t, conf_t, idx)
             else:
                 if arm_data:
                     refine_match(self.threshold, truths, defaults, self.variance, labels, loc_t, conf_t, idx, arm_loc_data[idx].data)
                 else:
                     match(self.threshold, truths, defaults, self.variance, labels, loc_t, conf_t, idx)
-                
+
         if self.use_gpu:
             loc_t = loc_t.cuda()
             conf_t = conf_t.cuda()
-       
+
         # compute matched anchor number for each gt
         '''
         for i in targets:
@@ -140,7 +140,7 @@ class MultiBoxLoss(nn.Module):
         loc_p = loc_data[pos_idx].view(-1, 4)
         loc_t = loc_t[pos_idx].view(-1, 4)
         loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
-        
+
         # Compute max conf across batch for hard negative mining
         ignore = conf_t < 0
         #print(sum(conf_t[0].data.cpu().numpy()==1) , sum(conf_t[0].data.cpu().numpy()==-1))
@@ -158,7 +158,7 @@ class MultiBoxLoss(nn.Module):
         num_pos = pos.long().sum(1, keepdim=True)
         num_neg = torch.clamp(self.negpos_ratio*num_pos, max=pos.size(1)-1)
         neg = idx_rank < num_neg.expand_as(idx_rank)
-        
+
         # Confidence Loss Including Positive and Negative Examples
         pos_idx = pos.unsqueeze(2).expand_as(conf_data)
         neg_idx = neg.unsqueeze(2).expand_as(conf_data)
@@ -181,7 +181,7 @@ class focalLoss(nn.Module):
             examples are down-weighted.
             alpha may be set by inverse class frequency or treated as a hyper-param
             If you don't want to balance factor, set alpha to 1
-            If you don't want to focusing factor, set gamma to 1 
+            If you don't want to focusing factor, set gamma to 1
             which is same as normal cross entropy loss
         """
         super(focalLoss, self).__init__()
@@ -224,7 +224,7 @@ class focalLoss(nn.Module):
                 shape: [batch_size,num_objs,5] (last idx is the label).
         """
         loc_data, conf_data, priors = predictions
-    
+
         num = loc_data.size(0)
         priors = priors[:loc_data.size(1), :]
         num_priors = (priors.size(0))
@@ -238,13 +238,13 @@ class focalLoss(nn.Module):
             labels = targets[idx][:, -1].data
             defaults = priors.data
             # sft match strategy , swordli
-            if ac: 
+            if ac:
                 sfd_match(self.threshold, truths, defaults, self.variance, labels,
                       loc_t, conf_t, idx)
             else:
                 match(self.threshold, truths, defaults, self.variance, labels,
                       loc_t, conf_t, idx)
-           
+
         if self.use_gpu:
             loc_t = loc_t.cuda()
             conf_t = conf_t.cuda()
@@ -255,7 +255,7 @@ class focalLoss(nn.Module):
         ############# Localization Loss part ##############
         pos = conf_targets > 0 # ignore background
         num_pos = pos.long().sum(1, keepdim = True)
-        
+
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
         loc_p = loc_data[pos_idx].view(-1, 4)
         loc_t = loc_targets[pos_idx].view(-1, 4)
@@ -289,7 +289,7 @@ class focalLoss(nn.Module):
         # This is focal loss presented in the paper eq(5)
         conf_loss = -self.alpha * ((1 - p_t)**self.gamma * p_t_log)
 
-        N = max(1 , num_pos.data.sum()) # to avoid divide by 0. It is caused by data augmentation when crop the images. The cropping can distort the boxes 
+        N = max(1 , num_pos.data.sum()) # to avoid divide by 0. It is caused by data augmentation when crop the images. The cropping can distort the boxes
         conf_loss /= N # exclude number of background?
         loc_loss /= N
         return conf_loss, loc_loss
