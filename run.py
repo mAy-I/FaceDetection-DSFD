@@ -43,8 +43,6 @@ def parse_args():
 
 
 def infer(net, img, transform, thresh, cuda, shrink):
-    if shrink != 1:
-        img = cv2.resize(img, None, None, fx=shrink, fy=shrink, interpolation=cv2.INTER_LINEAR)
     x = torch.from_numpy(transform(img)[0]).permute(2, 0, 1)
     with torch.no_grad():
         x = Variable(x.unsqueeze(0))
@@ -105,7 +103,7 @@ def detect_frames():
 
     dataloader = DataLoader(ImageFolder('../detector-mayi/test/sample_mid01/inputs', shrink), batch_size=1, shuffle=False, num_workers=8)
 
-    for frame_idx, (img_batch) in enumerate(dataloader):
+    for frame_idx, (img_og_batch, img_batch) in enumerate(dataloader):
 
         ## Log progress
         if frame_idx % opt.log_step == 0:
@@ -113,6 +111,8 @@ def detect_frames():
 
         img_batch = img_batch.squeeze()
         img = img_batch.numpy()
+        img_og_batch = img_og_batch.squeeze()
+        img_og = img_og_batch.numpy()
 
         det = infer(net, img, transform, thresh, opt.cuda, shrink)
 
@@ -121,9 +121,9 @@ def detect_frames():
             for i in inds:
                 bbox = det[i, :4]
                 score = det[i, -1]
-                cv2.rectangle(img, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), [0,0,255], 3)
-                cv2.putText(img, '%.3f' % score, (int(bbox[0]), int(bbox[1])), 0, 1, [0,0,255], 3)
-        cv2.imwrite(opt.save_folder+'%05d.jpg' % (frame_idx), img)
+                cv2.rectangle(img_og, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), [0,0,255], 3)
+                cv2.putText(img_og, '%.3f' % score, (int(bbox[0]), int(bbox[1])), 0, 1, [0,0,255], 3)
+        cv2.imwrite(opt.save_folder+'%05d.jpg' % (frame_idx), img_og)
 
         ## Log progress
         if (frame_idx+1) % opt.log_step == 0:

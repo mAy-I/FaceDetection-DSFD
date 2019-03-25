@@ -26,9 +26,10 @@ class ImageFolder(Dataset):
         img_path = self.files[index % len(self.files)]
         # Extract image
         img = cv2.imread(img_path)
+        img_og = img
 
-        # if self.shrink != 1:
-        #     img = cv2.resize(img, None, None, fx=self.shrink, fy=self.shrink, interpolation=cv2.INTER_LINEAR)
+        if self.shrink != 1:
+            img = cv2.resize(img, None, None, fx=self.shrink, fy=self.shrink, interpolation=cv2.INTER_LINEAR)
 
         # h, w, _ = img.shape
         # dim_diff = np.abs(h - w)
@@ -45,7 +46,7 @@ class ImageFolder(Dataset):
         # # As pytorch tensor
         # input_img = torch.from_numpy(input_img).float()
 
-        return img
+        return img_og, img
 
     def __len__(self):
         return len(self.files)
