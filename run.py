@@ -40,6 +40,8 @@ def parse_args():
                         help='')
     parser.add_argument('--batch_size', type=int, default=1,
                         help='')
+    parser.add_argument('--frame_last', type=int, default=100000,
+                        help='')
 
     return parser.parse_args()
 
@@ -112,6 +114,10 @@ def detect_frames():
 
     for batch_idx, (img_og_batch, img_batch) in enumerate(dataloader):
 
+        ## `break` if there are no frames left
+        if batch_idx == len(dataloader)-1:
+            break
+
         ## Log progress
         if batch_idx % opt.log_step_batch == 0:
             time_detect_start = time.time()
@@ -140,7 +146,7 @@ def detect_frames():
                 print('#### FPS {:5.2f} -- face-detect #{:4} - #{:4}'
                     .format(opt.log_step_batch * opt.batch_size / (time.time()-time_detect_start), frame_idx - opt.log_step_batch * opt.batch_size + 1, frame_idx))
 
-        if frame_idx > 94:
+        if frame_idx > opt.frame_last:
             break
 
     # Log progress
