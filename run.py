@@ -42,18 +42,18 @@ def parse_args():
 
 
 
-def infer(net, img, transform, thresh, cuda, shrink):
-    x = torch.from_numpy(transform(img)[0]).permute(2, 0, 1)
+def infer(net, img_batch, transform, thresh, cuda, shrink):
+    img_batch = img_batch.numpy()
+    x = torch.from_numpy(transform(img_batch)[0]).permute(0, 3, 1, 2)
     with torch.no_grad():
-        x = Variable(x.unsqueeze(0))
+        x = Variable(x)
         if cuda:
             x = x.cuda()
-        # print (shrink, x.shape)
         y = net(x)      # forward pass
         detections = y.data
         # scale each detection back up to the image
-        scale = torch.Tensor([ img.shape[1]/shrink, img.shape[0]/shrink,
-                             img.shape[1]/shrink, img.shape[0]/shrink] )
+        scale = torch.Tensor([ img_batch.shape[2]/shrink, img_batch.shape[1]/shrink,
+                             img_batch.shape[2]/shrink, img_batch.shape[1]/shrink] )
         det = []
         for i in range(detections.size(1)):
             j = 0
@@ -109,12 +109,10 @@ def detect_frames():
         if frame_idx % opt.log_step == 0:
             time_visualize_start = time.time()
 
-        img_batch = img_batch.squeeze()
-        img = img_batch.numpy()
         img_og_batch = img_og_batch.squeeze()
         img_og = img_og_batch.numpy()
 
-        det = infer(net, img, transform, thresh, opt.cuda, shrink)
+        det = infer(net, img_batch, transform, thresh, opt.cuda, shrink)
 
         inds = np.where(det[:, -1] >= opt.visual_threshold)[0]
         if len(inds) != 0:

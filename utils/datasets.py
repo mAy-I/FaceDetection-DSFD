@@ -31,6 +31,8 @@ class ImageFolder(Dataset):
         if self.shrink != 1:
             img = cv2.resize(img, None, None, fx=self.shrink, fy=self.shrink, interpolation=cv2.INTER_LINEAR)
 
+        img = torch.from_numpy(img)
+
         # h, w, _ = img.shape
         # dim_diff = np.abs(h - w)
         # # Upper (left) and lower (right) padding
