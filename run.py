@@ -1,4 +1,7 @@
 from __future__ import print_function
+import time
+time_start = time.time()
+
 import sys
 import os
 import argparse
@@ -13,11 +16,9 @@ import pdb
 import numpy as np
 import cv2
 import math
-import time
 import shutil
 from torch.utils.data import DataLoader
 
-from data import TestBaseTransform
 from face_ssd import build_ssd
 from utils.datasets import *
 
@@ -42,19 +43,21 @@ def parse_args():
 
 
 
-def infer(net, img_batch, transform, thresh, cuda, shrink):
-    img_batch = img_batch.numpy()
-    x = torch.from_numpy(transform(img_batch)[0]).permute(0, 3, 1, 2)
+def infer(net, img_batch, thresh, cuda, shrink):
+
     with torch.no_grad():
-        x = Variable(x)
+
+        img_batch = Variable(img_batch)
         if cuda:
-            x = x.cuda()
-        y = net(x)      # forward pass
+            img_batch = img_batch.cuda()
+        y = net(img_batch)      # forward pass
         detections = y.data
+
         # scale each detection back up to the image
-        scale = torch.Tensor([ img_batch.shape[2]/shrink, img_batch.shape[1]/shrink,
-                             img_batch.shape[2]/shrink, img_batch.shape[1]/shrink] )
+        scale = torch.Tensor([ img_batch.shape[3]/shrink, img_batch.shape[2]/shrink,
+                             img_batch.shape[3]/shrink, img_batch.shape[2]/shrink] )
         det = []
+
         for i in range(detections.size(1)):
             j = 0
             while detections[0, i, j, 0] >= thresh:
@@ -64,8 +67,10 @@ def infer(net, img_batch, transform, thresh, cuda, shrink):
                 coords = (pt[0], pt[1], pt[2], pt[3])
                 det.append([pt[0], pt[1], pt[2], pt[3], score])
                 j += 1
+
         if (len(det)) == 0:
             det = [ [0.1,0.1,0.2,0.2,0.01] ]
+
         det = np.array(det)
 
         keep_index = np.where(det[:, 4] >= 0)[0]
@@ -89,8 +94,6 @@ def detect_frames():
     net.eval()
     print('Finished loading model!')
 
-    # evaluation
-    transform = TestBaseTransform((104, 117, 123))
     thresh = 0.01
 
     img = cv2.imread('../detector-mayi/test/sample_mid01/inputs/00000.jpg')
@@ -107,12 +110,12 @@ def detect_frames():
 
         ## Log progress
         if frame_idx % opt.log_step == 0:
-            time_visualize_start = time.time()
+            time_detect_start = time.time()
 
         img_og_batch = img_og_batch.squeeze()
         img_og = img_og_batch.numpy()
 
-        det = infer(net, img_batch, transform, thresh, opt.cuda, shrink)
+        det = infer(net, img_batch, thresh, opt.cuda, shrink)
 
         inds = np.where(det[:, -1] >= opt.visual_threshold)[0]
         if len(inds) != 0:
@@ -125,8 +128,16 @@ def detect_frames():
 
         ## Log progress
         if (frame_idx+1) % opt.log_step == 0:
-            print('#### FPS {:4.2f} -- visualize #{:4} - #{:4}'
-                .format(opt.log_step/(time.time()-time_visualize_start), frame_idx-opt.log_step+1, frame_idx))
+            print('#### FPS {:5.2f} -- face-detect #{:4} - #{:4}'
+                .format(opt.log_step/(time.time()-time_detect_start), frame_idx-opt.log_step+1, frame_idx))
+
+        if frame_idx == 999:
+            break
+
+    ## Log progress
+    if (frame_idx+1) % opt.log_step != 0:
+        print('#### FPS {:5.2f} -- face-detect #{:4} - #{:4}'
+            .format((frame_idx % opt.log_step + 1)/(time.time()-time_detect_start), frame_idx - frame_idx % opt.log_step, frame_idx))
 
 
 
@@ -157,12 +168,12 @@ def frame_to_video():
 
         ## Log progress
         if (i+1) % opt.log_step == 0:
-            print('#### FPS {:4.1f} -- f2v #{:4} - #{:4}'
+            print('#### FPS {:5.2f} -- f2v #{:4} - #{:4}'
                 .format(opt.log_step/(time.time()-time_f2v_start), i-opt.log_step+1, i))
 
     ## Log progress
     if (i+1) % opt.log_step != 0:
-        print('#### FPS {:4.1f} -- f2v #{:4} - #{:4}'
+        print('#### FPS {:5.2f} -- f2v #{:4} - #{:4}'
             .format((i % opt.log_step + 1)/(time.time()-time_f2v_start), i - i % opt.log_step, i))
 
     out.release()
@@ -178,6 +189,12 @@ if __name__ == '__main__':
     else:
         torch.set_default_tensor_type('torch.FloatTensor')
 
+    # detect (img_folder -> img_folder)
+    print('## {:8.2f} sec -- detect start'.format(time.time()-time_start))
     detect_frames()
+    print('## {:8.2f} sec -- detect complete'.format(time.time()-time_start))
 
-    # frame_to_video()
+    # to_video (img_folder -> video)
+    print('## {:8.2f} sec -- frame_to_video start'.format(time.time()-time_start))
+    frame_to_video()
+    print('## {:8.2f} sec -- frame_to_video complete'.format(time.time()-time_start))
