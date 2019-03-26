@@ -38,6 +38,8 @@ def parse_args():
                         help='Use cuda to train model')
     parser.add_argument('--log_step', type=int, default=50,
                         help='')
+    parser.add_argument('--batch_size', type=int, default=1,
+                        help='')
 
     return parser.parse_args()
 
@@ -56,26 +58,28 @@ def infer(net, img_batch, thresh, cuda, shrink):
         # scale each detection back up to the image
         scale = torch.Tensor([ img_batch.shape[3]/shrink, img_batch.shape[2]/shrink,
                              img_batch.shape[3]/shrink, img_batch.shape[2]/shrink] )
-        det = []
 
-        for i in range(detections.size(1)):
-            j = 0
-            while detections[0, i, j, 0] >= thresh:
-                score = detections[0, i, j, 0].cpu().numpy()
-                #label_name = labelmap[i-1]
-                pt = (detections[0, i, j, 1:]*scale).cpu().numpy()
-                coords = (pt[0], pt[1], pt[2], pt[3])
-                det.append([pt[0], pt[1], pt[2], pt[3], score])
-                j += 1
+        det_batch = []
 
-        if (len(det)) == 0:
-            det = [ [0.1,0.1,0.2,0.2,0.01] ]
+        for b in range(img_batch.size(0)):
+            det = []
+            for i in range(detections.size(1)):
+                j = 0
+                while detections[b, i, j, 0] >= thresh:
+                    score = detections[b, i, j, 0].cpu().numpy()
+                    #label_name = labelmap[i-1]
+                    pt = (detections[b, i, j, 1:]*scale).cpu().numpy()
+                    coords = (pt[0], pt[1], pt[2], pt[3])
+                    det.append([pt[0], pt[1], pt[2], pt[3], score])
+                    j += 1
+            if (len(det)) == 0:
+                det = [ [0.1,0.1,0.2,0.2,0.01] ]
+            det = np.array(det)
+            keep_index = np.where(det[:, 4] >= 0)[0]
+            det = det[keep_index, :]
+            det_batch.append(det)
 
-        det = np.array(det)
-
-        keep_index = np.where(det[:, 4] >= 0)[0]
-        det = det[keep_index, :]
-        return det
+        return det_batch
 
 
 
@@ -101,43 +105,46 @@ def detect_frames():
     shrink_const = 400.0
     max_im_shrink = ( (shrink_const*shrink_const) / (img_h * img_w)) ** 0.5
     shrink = max_im_shrink if max_im_shrink < 1 else 1
-    # print('max_im_shrink: ' + str(max_im_shrink))
-    # print('shrink: ' + str(shrink))
 
-    dataloader = DataLoader(ImageFolder('../detector-mayi/test/sample_mid01/inputs', shrink), batch_size=1, shuffle=False, num_workers=8)
+    dataloader = DataLoader(ImageFolder('../detector-mayi/test/sample_mid01/inputs', shrink), batch_size=opt.batch_size, shuffle=False, num_workers=8)
 
-    for frame_idx, (img_og_batch, img_batch) in enumerate(dataloader):
+    for batch_idx, (img_og_batch, img_batch) in enumerate(dataloader):
 
         ## Log progress
-        if frame_idx % opt.log_step == 0:
+        if batch_idx % opt.log_step_batch == 0:
             time_detect_start = time.time()
 
-        img_og_batch = img_og_batch.squeeze()
-        img_og = img_og_batch.numpy()
+        img_og_batch = img_og_batch.numpy()
 
-        det = infer(net, img_batch, thresh, opt.cuda, shrink)
+        det_batch = infer(net, img_batch, thresh, opt.cuda, shrink)
 
-        inds = np.where(det[:, -1] >= opt.visual_threshold)[0]
-        if len(inds) != 0:
-            for i in inds:
-                bbox = det[i, :4]
-                score = det[i, -1]
-                cv2.rectangle(img_og, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), [0,0,255], 3)
-                cv2.putText(img_og, '%.3f' % score, (int(bbox[0]), int(bbox[1])), 0, 1, [0,0,255], 3)
-        cv2.imwrite(opt.save_folder+'%05d.jpg' % (frame_idx), img_og)
+        for b in range(opt.batch_size):
+            frame_idx = batch_idx * opt.batch_size + b
 
-        ## Log progress
-        if (frame_idx+1) % opt.log_step == 0:
-            print('#### FPS {:5.2f} -- face-detect #{:4} - #{:4}'
-                .format(opt.log_step/(time.time()-time_detect_start), frame_idx-opt.log_step+1, frame_idx))
+            img_og = img_og_batch[b]
+            det = det_batch[b]
 
-        if frame_idx == 999:
+            inds = np.where(det[:, -1] >= opt.visual_threshold)[0]
+            if len(inds) != 0:
+                for i in inds:
+                    bbox = det[i, :4]
+                    score = det[i, -1]
+                    cv2.rectangle(img_og, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), [0,0,255], 3)
+                    cv2.putText(img_og, '%.3f' % score, (int(bbox[0]), int(bbox[1])), 0, 1, [0,0,255], 3)
+            cv2.imwrite(opt.save_folder+'%05d.jpg' % (frame_idx), img_og)
+
+            ## Log progress
+            if (batch_idx+1) % opt.log_step_batch == 0 and b == opt.batch_size-1:
+                print('#### FPS {:5.2f} -- face-detect #{:4} - #{:4}'
+                    .format(opt.log_step_batch * opt.batch_size / (time.time()-time_detect_start), frame_idx - opt.log_step_batch * opt.batch_size + 1, frame_idx))
+
+        if frame_idx > 94:
             break
 
-    ## Log progress
-    if (frame_idx+1) % opt.log_step != 0:
+    # Log progress
+    if (frame_idx+1) % (opt.log_step_batch*opt.batch_size) != 0:
         print('#### FPS {:5.2f} -- face-detect #{:4} - #{:4}'
-            .format((frame_idx % opt.log_step + 1)/(time.time()-time_detect_start), frame_idx - frame_idx % opt.log_step, frame_idx))
+            .format((frame_idx % (opt.log_step_batch*opt.batch_size) + 1)/(time.time()-time_detect_start), frame_idx - frame_idx % (opt.log_step_batch*opt.batch_size), frame_idx))
 
 
 
@@ -183,6 +190,8 @@ def frame_to_video():
 if __name__ == '__main__':
 
     opt = parse_args()
+
+    opt.log_step_batch = int(opt.log_step / opt.batch_size)
 
     if opt.cuda and torch.cuda.is_available():
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
