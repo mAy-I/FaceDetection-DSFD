@@ -108,6 +108,8 @@ def detect_frames():
 
     dataloader = DataLoader(ImageFolder('../detector-mayi/test/sample_mid01/inputs', shrink), batch_size=opt.batch_size, shuffle=False, num_workers=8)
 
+    time_detect_start_0 = time.time()
+
     for batch_idx, (img_og_batch, img_batch) in enumerate(dataloader):
 
         ## Log progress
@@ -145,6 +147,9 @@ def detect_frames():
     if (frame_idx+1) % (opt.log_step_batch*opt.batch_size) != 0:
         print('#### FPS {:5.2f} -- face-detect #{:4} - #{:4}'
             .format((frame_idx % (opt.log_step_batch*opt.batch_size) + 1)/(time.time()-time_detect_start), frame_idx - frame_idx % (opt.log_step_batch*opt.batch_size), frame_idx))
+    # Log progress - total
+    print('##   FPS {:5.2f} -- face-detect #{:4} - #{:4}'
+        .format((frame_idx+1)/(time.time()-time_detect_start_0), 0, frame_idx))
 
 
 
